@@ -1,14 +1,91 @@
 <!DOCTYPE html>
-
-<html lang = "en">
-
+<html>
 <head>
-    <meta charset= "UTF-8">
-    <meta http-equiv="X-UA-Compatible" content= "IE-edge">
-    <meta name= "viewport" content= "width+device-width, initial-scale-1.0">
-    <link rel= "stylesheet" href="style.css">
-    <title> ABOUT PAGE</title>
-    
-</head> 
+    <title>easytrials</title>
+    <style>
+        body {
+            background-color: #f0f8ff; /* Light Blue */
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
 
+        h1 {
+            color: #333; /* Dark Gray */
+            text-align: center;
+            padding: 20px;
+        }
+
+        #chat-container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff; /* White */
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        #chat-box {
+            border: 1px solid #ccc; /* Light Gray */
+            padding: 10px;
+            min-height: 200px;
+            max-height: 300px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+        }
+
+        #user-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc; /* Light Gray */
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            background-color: #0074cc; /* Light Blue */
+            color: #fff; /* White */
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background-color: #005aa7; /* Darker Blue on Hover */
+        }
+    </style>
+</head>
+<body>
+    <h1>easytrials bot</h1>
+    <div id="chat-container">
+        <div id="chat-box"></div>
+        <input type="text" id="user-input" placeholder="Type your message...">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <div id = "logo-container">
+        <
+    </div>
+    <script>
+        function sendMessage() {
+            const userMessage = document.getElementById('user-input').value;
+            document.getElementById('user-input').value = '';
+            const chatBox = document.getElementById('chat-box');
+            chatBox.innerHTML += `<p>You: ${userMessage}</p>`;
+            
+            fetch('/get_response', {
+                method: 'POST',
+                body: new URLSearchParams({ user_input: userMessage }),
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+            })
+                .then(response => response.text())
+                .then(botResponse => {
+                    chatBox.innerHTML += `<p>Bot: ${botResponse}</p>`;
+                });
+        }
+    </script>
+</body>
 </html>

@@ -8,3 +8,8 @@ Chatbot interface where a patient is prompted to type in disease and location, s
 link for more information
 
 search terms are very specific 
+
+"can we find your location"
+
+what if we use NLP to make this better?
+how to get training data
