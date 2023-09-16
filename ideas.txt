@@ -1,0 +1,10 @@
+Implement a recommendation engine that suggests clinical trials based on a user's medical history, location, and preferences
+
+
+Problem: Patients and doctors alike want to find drug trials more easily
+
+
+Chatbot interface where a patient is prompted to type in disease and location, spit out trials near them. provide easy map/contact information. 
+link for more information
+
+search terms are very specific 
