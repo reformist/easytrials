@@ -145,6 +145,39 @@ def age_filter(user_age, wanted_age):
         return "OLDER_ADULT" in wanted_age
 
 
+
+
+
+def modified_sigmoid(x, c=10):
+    '''
+    take an int, return a float
+    scaling distance x s.t. x >= 0 --> [0, 1], monotonically decreasing
+    c is a constant to adjust for how sensitive a person is to distance/time from trial recruitment
+    a larger c indicates less sensistivity and vice versa
+    roughly speaking, c indicate the number of x such that f(x) ~= 1/2
+    monotomically decreasing on all reals; range from 0 to 1
+    we could set c=max_distance/2
+    '''
+    return -2 / (1+np.exp(-x/c)) + 2
+
+def date_scale(x, c=365):
+    '''
+    take a Timestamp instant, return a float
+    given a start date, return modified sigmoid step function
+    x before/on current day --> 1
+    x after current day --> modded sigmoid function
+    '''
+    until_trial = (x - pd.Timestamp(datetime.date.today())).days
+
+    if until_trial <= 0:
+        return 1
+    
+    return modified_sigmoid(until_trial, c=c)
+
+def get_score(row, dist_weight=1, date_weight=1):
+    return dist_weight*modified_sigmoid(row["Distance"]) + date_weight*date_scale(row["Start Date"])
+    
+    
 def trial_api_call(condition=condition, zipcode=target_zip, max_distance=max_distance, num_out=num_out, pagesize=pagesize, user_age=18, user_sex="ALL"):
     """
     over arching function that call other functions
@@ -177,7 +210,8 @@ def trial_api_call(condition=condition, zipcode=target_zip, max_distance=max_dis
     #merged back to original df but only the locations that we want
     df = filtered_loc_df.merge(df, how="left", on="NCT Number", )
     #sorting to get closest locations
-    df.sort_values("Distance", ascending=True, inplace=True)
+    df["Score"] = df.apply(get_score, axis=1)
+    df.sort_values("Score", ascending=False, inplace=True)
 
     #temp output, to be better with a score model
     return df.iloc[:num_out, :]
@@ -194,36 +228,6 @@ conditions_df = pd.DataFrame({"Condition": [k for k in conditions.keys()],
     
 conditions_df.sort_values("Occurence", ascending=False)
 
-
-
-def modified_sigmoid(x, c=10, step=False):
-    '''
-    take an int, return a float
-    scaling distance x s.t. x >= 0 --> [0, 1], monotonically decreasing
-    c is a constant to adjust for how sensitive a person is to distance/time from trial recruitment
-    a larger c indicates less sensistivity and vice versa
-    roughly speaking, c indicate the number of x such that f(x) ~= 1/2
-    monotomically decreasing on all reals; range from 0 to 1
-    we could set c=max_distance/2
-    '''
-    return -2 / (1+np.exp(-x/c)) + 2
-
-def date_scale(x, c=100):
-    '''
-    take a Timestamp instant, return a float
-    given a start date, return modified sigmoid step function
-    x before/on current day --> 1
-    x after current day --> modded sigmoid function
-    '''
-    until_trial = (x - pd.Timestamp(datetime.date.today())).days
-
-    if until_trial <= 0:
-        return 1
-    
-    return modified_sigmoid(until_trial, c=c)
-
-
-    
 
 #plot modified_sigmoid/distance scale
 # x = np.linspace(-25, 25, 500)
