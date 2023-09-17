@@ -25,6 +25,7 @@
 // export default App;
 
 import React, { useState, useEffect } from 'react';
+import './App.css';
 
 function App() {
   // State Management of my Component
@@ -35,7 +36,56 @@ function App() {
   //   sendMessage();
   // },[]) // a watcher, if I want to send something every time a variable changes, trigger the []
 
-  const sendMessage = () => { // hook it up to a component so it sees it every time a button is pressed
+  const parentFunction = () => { 
+    if (userInput.includes("zipcode:")) {
+      sendMessageFDA('http://localhost:5000/fda')
+    } else {
+      sendMessage('http://localhost:5000/')
+    }
+  }
+
+  const sendMessageFDA = (url) => {
+    const messageData = {
+      sender: 'You',
+      message: userInput,
+    }
+
+    console.log(chatMessages)
+    setChatMessages([...chatMessages, { sender: 'You', message: userInput }]);
+    console.log(chatMessages)
+
+
+    setUserInput('');
+    fetch(url, { // holds flask server endpoint
+    method: 'POST', //post request send data in it
+    headers: {
+      'Content-Type' : 'application/json'
+    },
+    body: JSON.stringify(messageData),
+    })
+    .then((response) => response.json())
+    .then((response) => { // botResponse saves my bot backend
+      // setBotResponse(response)
+
+      //update chat messages if needed
+
+      // setBotResponse([...botResponse, {sender: 'Bot', message: response}]);
+      console.log(chatMessages)
+      console.log("RESPONSE: ", response)
+
+      setChatMessages([
+        ...chatMessages,
+        { sender: 'You', message: userInput },
+        { sender: 'Bot', message: response }, // Assuming 'response' is the bot's message
+      ]);      console.log(chatMessages)
+      setUserInput('');
+    })
+    .catch((error) => {
+      console.error('Error: ', error)
+    });
+  }
+  
+  const sendMessage = (url) => { // hook it up to a component so it sees it every time a button is pressed
     const messageData = {
       sender: 'You',
       message: userInput,
@@ -46,7 +96,7 @@ function App() {
 
      // ... means we don't have a double array
     setUserInput('');
-    fetch('http://localhost:5000', { // holds flask server endpoint
+    fetch(url, { // holds flask server endpoint
     method: 'POST', //post request send data in it
     headers: {
       'Content-Type' : 'application/json'
@@ -55,66 +105,29 @@ function App() {
   })
     .then((response) => response.json())
     .then((response) => { // botResponse saves my bot backend
-      setBotResponse(response)
+      // setBotResponse(response)
 
       //update chat messages if needed
 
       // setBotResponse([...botResponse, {sender: 'Bot', message: response}]);
       console.log(chatMessages)
+      console.log("RESPONSE: ", response)
 
       setChatMessages([
         ...chatMessages,
         { sender: 'You', message: userInput },
-        { sender: 'easytrials bot', message: response }, // Assuming 'response' is the bot's message
+        { sender: 'Bot', message: response }, // Assuming 'response' is the bot's message
       ]);      console.log(chatMessages)
       setUserInput('');
     })
     .catch((error) => {
       console.error('Error: ', error)
     });
-  
 };
 
-// const sendMessage = (messageData) => {
-//   fetch('/', {
-//     method: 'POST', // Use the appropriate HTTP method (e.g., POST)
-//     headers: {
-//       'Content-Type': 'application/json', // Set the appropriate content type
-//     },
-//     body: JSON.stringify(messageData), // Convert the data to JSON
-//   })
-//     .then((response) => {
-//       if (!response.ok) {
-//         throw new Error('Network response was not ok');
-//       }
-//       return response.json(); // If you expect a JSON response
-//     })
-//     .then((data) => {
-//       // Handle the response from the server if needed
-//       console.log('Server response:', data);
-//     })
-//     .catch((error) => {
-//       // Handle errors
-//       console.error('Error:', error);
-//     });
-// };
-
-
-  //   fetch('/request', { // add full url
-  //     method: 'POST', //post request send data in it
-  //     body: new URLSearchParams({ user_input: userInput }), // how to create json from body in python
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //     },
-  //   })
-  //     .then(response => response.json())
-  //     .then(botResponse => { // botResponse saves my bot backend
-  //       setChatMessages([...chatMessages, { sender: 'Bot', message: botResponse }]);
-  //     });
-  // };
-
   return (
-    <div>
+    
+    <div id = "app" style = {appStyle}>
       <h1 align = "center">easytrials bot</h1>
       <div id="chat-container" style={chatContainerStyle}>
         <div id="chat-box" style={chatBoxStyle}>
@@ -138,7 +151,7 @@ function App() {
           value={userInput}
           onChange={e => setUserInput(e.target.value)}
         />
-        <button style={buttonStyle} onClick={sendMessage}>
+        <button style={buttonStyle} onClick={parentFunction}>
           Send
         </button>
       </div>
@@ -153,6 +166,16 @@ function App() {
   );
 }
 
+
+const appStyle = {
+  backgroundColor: '#f0f8ff', // Light blue background color
+  minHeight: '100vh', // Make sure the container takes up the full viewport height
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
 const chatContainerStyle = {
   maxWidth: '400px',
   margin: '0 auto',
@@ -163,8 +186,8 @@ const chatContainerStyle = {
 };
 
 const chatBoxStyle = {
-  border: '1px solid #ccc',
-  padding: '10px',
+  border: '2px solid #ccc',
+  padding: '15px',
   minHeight: '200px',
   maxHeight: '300px',
   overflowY: 'scroll',
@@ -173,9 +196,9 @@ const chatBoxStyle = {
 
 const userInputStyle = {
   width: '100%',
-  padding: '10px',
-  border: '1px solid #ccc',
-  borderRadius: '5px',
+  padding: '12px',
+  border: '3px solid #ccc',
+  borderRadius: '4px',
   marginBottom: '10px',
 };
 
