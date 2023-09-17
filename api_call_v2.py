@@ -6,12 +6,24 @@ import numpy as np
 import zipcodes
 import math
 from geopy.distance import geodesic
+import datetime
+import matplotlib.pyplot as plt
+
+#defaults
+condition = "breast cancer"
+target_zip = "10027" #remember to clip to 5 digits
+max_distance = "50" #miles
+num_out = -1
+pagesize=20
 
 
-
-def get(condition, zipcode, max_distance):
+def get(condition, zipcode, max_distance, pagesize=pagesize, sex="ALL", age="CHILD,ADULT,OLDER_ADULT"):
     """
     making the api call
+    condition, zipcode, and max distance are strings
+    pagesize can to up to 1000, but it get slow
+    sex can be "ALL", "FEMALE", or "MALE"
+    age can be "CHILD", "ADULT", or "OLDER_ADULT"
     """
     zipcode_info = zipcodes.matching(zipcode)[0]
     lat, long = zipcode_info["lat"], zipcode_info["long"]
@@ -20,19 +32,19 @@ def get(condition, zipcode, max_distance):
     }
     params = {
         'format': 'csv',
-        'query.cond': condition,
         'filter.overallStatus': 'NOT_YET_RECRUITING,RECRUITING',
+        'query.cond': condition,
         'postFilter.geo': f'distance({lat},{long},{max_distance}mi)',
-        # 'fields': 'NCT Number,Study Title,Study URL,Acronym,Study Status,Brief Summary,Study Results,Conditions,Interventions,Primary Outcome Measures,Secondary Outcome Measures,Other Outcome Measures,Sponsor,Collaborators,Sex,Age,Phases,Enrollment,Funder Type,Study Type,Study Design,Other IDs,Start Date,Primary Completion Date,Completion Date,First Posted,Results First Posted,Last Update Posted,Locations,Study Documents',
+        # 'Sex'
         'sort': '@relevance',
-        'pageSize': '20',
-    }
+        'pageSize': str(pagesize),
+        'fields': 'NCT Number,Study Title,Study URL,Study Status,Brief Summary,Study Results,Conditions,Interventions,Sex,Age,Phases,Enrollment,Start Date,Primary Completion Date,Locations'}
     response = requests.get('https://clinicaltrials.gov/api/v2/studies', params=params, headers=headers)
     csv_content = response.content.decode('utf-8')
     return pd.read_csv(StringIO(csv_content))
 
 
-def get_loc(df):
+def parse_locations(df):
     """
     spliting location information from api call
     making a dataframe with NCT Number and each parsed location
@@ -67,6 +79,9 @@ def get_loc(df):
                 #API repeat city and state
             elif len(loc) == 7:
                 loc = loc[0:1] + loc[3:]
+            elif len(loc) == 8:
+                #when given street
+                loc = ["".join(loc[:2])] + loc[4:]
 
             assert len(loc) == 5, f"len loc is not five {loc}"
 
@@ -79,19 +94,15 @@ def get_loc(df):
 
     
 
-
-
-
-
 allowed_characters_pattern = re.compile(r'1234567890-')
 def filter_zipcodes_within_radius(df, target_zip, radius_miles):
-    target_location = zipcodes.matching(target_zip)
-    if not target_location:
+    tarparse_locationsation = zipcodes.matching(target_zip)
+    if not tarparse_locationsation:
         print(f"ZIP code {target_zip} not found.")
         return pd.DataFrame()
 
-    target_lat = target_location[0]['lat']
-    target_lon = target_location[0]['long']
+    target_lat = tarparse_locationsation[0]['lat']
+    target_lon = tarparse_locationsation[0]['long']
 
     def calculate_distance(row):
         row_zip = row['Zipcode']
@@ -118,15 +129,23 @@ def splitting(x):
         return x.split("|")
     return x
 
+def sex_filter(user_sex, wanted_sex):
+    if wanted_sex == "ALL":
+        return True
+    return user_sex == wanted_sex
 
-#defaults
-condition = "heart disease"
-target_zip = "10027" #remember to clip to 5 digits
-max_distance = "50" #miles
-num_out = 5
+def age_filter(user_age, wanted_age):
+    return True
+    user_age = int(user_age)
+    if user_age <= 18:
+        return "CHILD" in wanted_age
+    elif user_age <= 64:
+        return "ADULT" in wanted_age
+    else:
+        return "OLDER_ADULT" in wanted_age
 
-out = {}
-def trial_api_call(condition=condition, zipcode=target_zip, max_distance=max_distance, num_out=num_out):
+
+def trial_api_call(condition=condition, zipcode=target_zip, max_distance=max_distance, num_out=num_out, pagesize=pagesize, user_age=18, user_sex="ALL"):
     """
     over arching function that call other functions
     given the above parameters, return top num_out clinical trials
@@ -134,43 +153,89 @@ def trial_api_call(condition=condition, zipcode=target_zip, max_distance=max_dis
     #type casting for later functions
     max_distance, zipcode = str(max_distance), str(zipcode)
     #doing the actual api call
-    df = get(condition, zipcode, max_distance)
-
+    df = get(condition, zipcode, max_distance, pagesize=pagesize)
+    df = df[df['Age'].apply(lambda age: age_filter(user_age, age)) & df['Sex'].apply(lambda sex: sex_filter(user_sex, sex))]
     #cleaning up the data frame
+    #spliltting age
+    df["Age"] = df["Age"].apply(lambda x: x.split(", "))
     #splitting by |
-    for col in ("Conditions", "Interventions", "Other IDs", \
-                "Primary Outcome Measures", "Secondary Outcome Measures",\
-                "Other Outcome Measures", "Study Design"):
+    for col in ("Conditions", "Interventions"):#, "Other IDs", \
+                # "Primary Outcome Measures", "Secondary Outcome Measures",\
+                # "Other Outcome Measures", "Study Design"):
         df[col] = df[col].apply(splitting)
 
     #type cast into datetime
-    for col in ("Start Date", "Primary Completion Date",\
-                "Completion Date", "First Posted", \
-                "Results First Posted", "Last Update Posted"):
+    for col in ("Start Date", "Primary Completion Date"): #,\
+                # "Completion Date", "First Posted", \
+                # "Results First Posted", "Last Update Posted"):
         df[col] = pd.to_datetime(df[col])
 
     #parse the location into a separate df
-    loc_df = get_loc(df)
-    out['loc_df'] = loc_df
+    loc_df = parse_locations(df)
     #filter the location to be within target radius
     filtered_loc_df = filter_zipcodes_within_radius(loc_df, zipcode, max_distance)
-    out["filtered_loc_df"] = filtered_loc_df
     #merged back to original df but only the locations that we want
     df = filtered_loc_df.merge(df, how="left", on="NCT Number", )
-    out['df'] = df
     #sorting to get closest locations
     df.sort_values("Distance", ascending=True, inplace=True)
 
     #temp output, to be better with a score model
     return df.iloc[:num_out, :]
 
-    #picking out conditions
-    conditions = {}
-    for i, row in df.iterrows():
-        for condition in row["Conditions"]:
-            conditions[condition] = conditions.get(condition, 0) + 1
+#picking out conditions
+df = trial_api_call()
+conditions = {}
+for i, row in df.iterrows():
+    for condition in row["Conditions"]:
+        conditions[condition] = conditions.get(condition, 0) + 1
 
-    conditions_df = pd.DataFrame({"Condition": [k for k in conditions.keys()],
-                                "Occurence": [v for v in conditions.values()]})
-        
-    conditions_df.sort_values("Occurence", ascending=False)
+conditions_df = pd.DataFrame({"Condition": [k for k in conditions.keys()],
+                            "Occurence": [v for v in conditions.values()]})
+    
+conditions_df.sort_values("Occurence", ascending=False)
+
+
+
+def modified_sigmoid(x, c=10, step=False):
+    '''
+    take an int, return a float
+    scaling distance x s.t. x >= 0 --> [0, 1], monotonically decreasing
+    c is a constant to adjust for how sensitive a person is to distance/time from trial recruitment
+    a larger c indicates less sensistivity and vice versa
+    roughly speaking, c indicate the number of x such that f(x) ~= 1/2
+    monotomically decreasing on all reals; range from 0 to 1
+    we could set c=max_distance/2
+    '''
+    return -2 / (1+np.exp(-x/c)) + 2
+
+def date_scale(x, c=100):
+    '''
+    take a Timestamp instant, return a float
+    given a start date, return modified sigmoid step function
+    x before/on current day --> 1
+    x after current day --> modded sigmoid function
+    '''
+    until_trial = (x - pd.Timestamp(datetime.date.today())).days
+
+    if until_trial <= 0:
+        return 1
+    
+    return modified_sigmoid(until_trial, c=c)
+
+
+    
+
+#plot modified_sigmoid/distance scale
+# x = np.linspace(-25, 25, 500)
+# y = modified_sigmoid(x)
+# plt.figure(figsize=(10, 6))
+# plt.plot(x, y, label='Modified Sigmoid Function', color='blue')
+# plt.xlabel('Days from Start Date')
+# plt.ylabel('Output')
+# plt.title('Modified Sigmoid Function')
+# plt.legend()
+# plt.grid(True)
+# plt.show()
+
+# startdate = df["Start Date"][0]
+# print(date_scale(startdate + datetime.timedelta(1)))
